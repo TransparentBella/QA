@@ -1,4 +1,13 @@
-
+cd /home/bella/Check/backend
+/home/bella/Check/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8899 --reload
+cd /home/bella/Check/frontend
+npm run dev -- --host 0.0.0.0 --port 5173
+- 普通用户：
+- 用户名： user
+- 密码： user123
+- 管理员：
+- 用户名： admin
+- 密码： admin123
 # 交互式视频评测平台（花滑项目）系统设计与实施规划
 
 我需要开发一个左侧答题、右侧视频的平台。核心需求是：用户的每一次交互动作（点击选项、点击红色删除、点击蓝色确认）都必须立即触发后端记录，而不仅仅是最后提交时保存。
