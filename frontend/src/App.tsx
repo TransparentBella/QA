@@ -1,40 +1,47 @@
 import './App.css'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 
 type Role = 'user' | 'admin'
-type ActionType = 'SELECT' | 'CLEAR' | 'CONFIRM'
+type ReviewStatus = 'pending' | 'passed' | 'modified' | 'deleted'
 
 type LoginResponse = {
   access_token: string
   token_type: 'bearer'
   role: Role
+  name: string
+}
+
+type RegisterResponse = {
+  id: string
+  name: string
+  role: Role
 }
 
 type MeResponse = {
   id: string
-  username: string
+  name: string
   role: Role
 }
 
-type QuizOption = {
-  option_id: string
-  label: string
-  text: string
-}
-
-type QuizItem = {
-  quiz_item_id: string
-  stem: string
+type ReviewItem = {
+  id: string
+  item_key: string
+  video_id: string
   video_uri: string
-  options: QuizOption[]
-  order_index: number
-  selected_index: number | null
-  confirmed: boolean
+  type: string
+  q_category: string
+  question: string
+  options: string[]
+  answer: string
+  status: ReviewStatus
+  is_delete: boolean
+  is_modified: boolean
+  _modifiedAt: string | null
+  _modified_by: string | null
 }
 
-type QuizStartResponse = {
-  quiz_instance_id: string
-  items: QuizItem[]
+type ReviewItemsResponse = {
+  items: ReviewItem[]
 }
 
 async function apiJson<T>(
@@ -54,47 +61,70 @@ async function apiJson<T>(
 
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(text || `HTTP ${res.status}`)
+    try {
+      const parsed = JSON.parse(text) as { detail?: string }
+      throw new Error(parsed.detail || text || `HTTP ${res.status}`)
+    } catch {
+      throw new Error(text || `HTTP ${res.status}`)
+    }
   }
 
   return (await res.json()) as T
 }
 
-function randomUuid(): string {
-  return crypto.randomUUID()
-}
-
 function App() {
   const [token, setToken] = useState<string>(() => localStorage.getItem('token') ?? '')
   const [me, setMe] = useState<MeResponse | null>(null)
-  const [authError, setAuthError] = useState<string>('')
+  const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
+  const [pageError, setPageError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
 
-  const [username, setUsername] = useState('user')
-  const [password, setPassword] = useState('user123')
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [name, setName] = useState('')
+  const [password, setPassword] = useState('')
+  const [registerName, setRegisterName] = useState('')
+  const [registerPassword, setRegisterPassword] = useState('')
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('')
 
-  const [poolName, setPoolName] = useState<'Rhythm' | 'Similarity'>('Rhythm')
-  const [questionCount, setQuestionCount] = useState<number>(2)
-  const [quiz, setQuiz] = useState<QuizStartResponse | null>(null)
-  const [currentIndex, setCurrentIndex] = useState<number>(0)
+  const [items, setItems] = useState<ReviewItem[]>([])
+  const [selectedType, setSelectedType] = useState('ALL')
+  const [selectedCategory, setSelectedCategory] = useState('ALL')
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isEditingAnswer, setIsEditingAnswer] = useState(false)
+  const [draftAnswer, setDraftAnswer] = useState('')
+  const [busyAction, setBusyAction] = useState<'pass' | 'delete' | 'modify' | ''>('')
 
-  const sequenceRef = useRef(0)
-  const queueRef = useRef<Promise<void>>(Promise.resolve())
   const panelScrollRef = useRef<HTMLDivElement | null>(null)
 
-  const currentItem = useMemo(() => {
-    if (!quiz) return null
-    return quiz.items[currentIndex] ?? null
-  }, [quiz, currentIndex])
+  const typeOptions = useMemo(() => ['ALL', ...Array.from(new Set(items.map((item) => item.type)))], [items])
+  const categoryOptions = useMemo(
+    () => ['ALL', ...Array.from(new Set(items.map((item) => item.q_category)))],
+    [items],
+  )
 
-  const confirmedCount = quiz ? quiz.items.filter((item) => item.confirmed).length : 0
-  const selectedCount = quiz ? quiz.items.filter((item) => item.selected_index !== null).length : 0
-  const progressPercent = quiz ? Math.round((confirmedCount / quiz.items.length) * 100) : 0
+  const filteredItems = useMemo(
+    () =>
+      items.filter((item) => {
+        const matchType = selectedType === 'ALL' || item.type === selectedType
+        const matchCategory = selectedCategory === 'ALL' || item.q_category === selectedCategory
+        return matchType && matchCategory
+      }),
+    [items, selectedType, selectedCategory],
+  )
+
+  const currentItem = filteredItems[currentIndex] ?? null
+  const passedCount = items.filter((item) => item.status === 'passed').length
+  const deletedCount = items.filter((item) => item.status === 'deleted').length
+  const modifiedCount = items.filter((item) => item.status === 'modified').length
 
   useEffect(() => {
     if (!token) {
       setMe(null)
+      setItems([])
       return
     }
+
     apiJson<MeResponse>('/api/v1/auth/me', { token })
       .then(setMe)
       .catch(() => {
@@ -105,20 +135,88 @@ function App() {
   }, [token])
 
   useEffect(() => {
+    if (!token) return
+    loadReviewItems().catch((error) => {
+      setPageError(error instanceof Error ? error.message : '加载审核数据失败')
+    })
+  }, [token])
+
+  useEffect(() => {
+    setCurrentIndex(0)
+  }, [selectedType, selectedCategory])
+
+  useEffect(() => {
+    if (currentIndex >= filteredItems.length) {
+      setCurrentIndex(filteredItems.length > 0 ? filteredItems.length - 1 : 0)
+    }
+  }, [filteredItems.length, currentIndex])
+
+  useEffect(() => {
     panelScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [currentIndex])
+    setIsEditingAnswer(false)
+    setDraftAnswer(currentItem?.answer ?? '')
+  }, [currentIndex, currentItem?.id])
+
+  async function loadReviewItems() {
+    if (!token) return
+    setPageError('')
+    const response = await apiJson<ReviewItemsResponse>('/api/v1/review-items', { token })
+    setItems(response.items)
+  }
 
   async function handleLogin() {
     setAuthError('')
+    setAuthSuccess('')
+    setAuthLoading(true)
     try {
       const res = await apiJson<LoginResponse>('/api/v1/auth/login', {
         method: 'POST',
-        json: { username, password },
+        json: { name, password },
       })
       setToken(res.access_token)
       localStorage.setItem('token', res.access_token)
     } catch (e) {
       setAuthError(e instanceof Error ? e.message : '登录失败')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  async function handleRegister() {
+    setAuthError('')
+    setAuthSuccess('')
+    setAuthLoading(true)
+    if (registerPassword !== registerConfirmPassword) {
+      setAuthError('两次输入的密码不一致')
+      setAuthLoading(false)
+      return
+    }
+    try {
+      await apiJson<RegisterResponse>('/api/v1/auth/register', {
+        method: 'POST',
+        json: { name: registerName, password: registerPassword },
+      })
+      setAuthMode('login')
+      setName(registerName.trim())
+      setPassword('')
+      setRegisterName('')
+      setRegisterPassword('')
+      setRegisterConfirmPassword('')
+      setAuthSuccess('注册成功，请登录')
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : '注册失败')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (authLoading) return
+    if (authMode === 'login') {
+      await handleLogin()
+    } else {
+      await handleRegister()
     }
   }
 
@@ -126,97 +224,83 @@ function App() {
     setToken('')
     localStorage.removeItem('token')
     setMe(null)
-    setQuiz(null)
+    setItems([])
+    setSelectedType('ALL')
+    setSelectedCategory('ALL')
     setCurrentIndex(0)
+    setIsEditingAnswer(false)
+    setDraftAnswer('')
   }
 
-  async function startQuiz() {
-    if (!token) return
-    const res = await apiJson<QuizStartResponse>('/api/v1/quiz/start', {
-      method: 'POST',
-      token,
-      json: { pool_name: poolName, question_count: questionCount },
-    })
-    setQuiz(res)
-    setCurrentIndex(0)
-    sequenceRef.current = 0
-    queueRef.current = Promise.resolve()
+  function replaceItem(updatedItem: ReviewItem) {
+    setItems((prev) => prev.map((item) => (item.id === updatedItem.id ? updatedItem : item)))
   }
 
-  function enqueueLog(payload: Record<string, unknown>) {
-    if (!token) return
-    queueRef.current = queueRef.current
-      .then(async () => {
-        await apiJson('/api/v1/log-interaction', { method: 'POST', token, json: payload })
+  function advanceToNextItem() {
+    setCurrentIndex((prev) => (filteredItems.length > 0 ? Math.min(prev + 1, filteredItems.length - 1) : 0))
+  }
+
+  async function handlePass() {
+    if (!token || !currentItem) return
+    setBusyAction('pass')
+    setPageError('')
+    try {
+      const updated = await apiJson<ReviewItem>(`/api/v1/review-items/${currentItem.id}/pass`, {
+        method: 'POST',
+        token,
       })
-      .catch(async () => {
-        await apiJson('/api/v1/log-interaction', { method: 'POST', token, json: payload })
-      })
-  }
-
-  function baseLog(quizItemId: string, actionType: ActionType) {
-    sequenceRef.current += 1
-    return {
-      quiz_item_id: quizItemId,
-      action_type: actionType,
-      client_timestamp_ms: Date.now(),
-      sequence_number: sequenceRef.current,
-      client_event_id: randomUuid(),
+      replaceItem(updated)
+      advanceToNextItem()
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : '通过操作失败')
+    } finally {
+      setBusyAction('')
     }
   }
 
-  function updateItem(partial: Partial<QuizItem>) {
-    if (!quiz || !currentItem) return
-    const nextItems = quiz.items.map((it) =>
-      it.quiz_item_id === currentItem.quiz_item_id ? { ...it, ...partial } : it,
-    )
-    setQuiz({ ...quiz, items: nextItems })
-  }
-
-  function onSelect(index: number) {
-    if (!currentItem || currentItem.confirmed) return
-    const opt = currentItem.options[index]
-    updateItem({ selected_index: index })
-    enqueueLog({
-      ...baseLog(currentItem.quiz_item_id, 'SELECT'),
-      selected_index: index,
-      selected_option_id: opt.option_id,
-    })
-  }
-
-  function onClear() {
-    if (!currentItem) return
-    updateItem({ selected_index: null, confirmed: false })
-    enqueueLog(baseLog(currentItem.quiz_item_id, 'CLEAR'))
-  }
-
-  function onConfirm() {
-    if (!currentItem || currentItem.confirmed) return
-    if (currentItem.selected_index === null) return
-    const idx = currentItem.selected_index
-    const opt = currentItem.options[idx]
-    const nextIndex = quiz && currentIndex < quiz.items.length - 1 ? currentIndex + 1 : currentIndex
-    setQuiz((prev) => {
-      if (!prev) return prev
-      const nextItems = prev.items.map((it) =>
-        it.quiz_item_id === currentItem.quiz_item_id ? { ...it, confirmed: true } : it,
-      )
-      return { ...prev, items: nextItems }
-    })
-    if (nextIndex !== currentIndex) {
-      setCurrentIndex(nextIndex)
+  async function handleDelete() {
+    if (!token || !currentItem) return
+    setBusyAction('delete')
+    setPageError('')
+    try {
+      const updated = await apiJson<ReviewItem>(`/api/v1/review-items/${currentItem.id}/delete`, {
+        method: 'POST',
+        token,
+      })
+      replaceItem(updated)
+      advanceToNextItem()
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : '删除操作失败')
+    } finally {
+      setBusyAction('')
     }
-    enqueueLog({
-      ...baseLog(currentItem.quiz_item_id, 'CONFIRM'),
-      selected_index: idx,
-      selected_option_id: opt.option_id,
-    })
   }
 
-  const currentOptionLabel =
-    currentItem && currentItem.selected_index !== null
-      ? String.fromCharCode(65 + currentItem.selected_index)
-      : '--'
+  async function handleModify() {
+    if (!token || !currentItem) return
+    const trimmed = draftAnswer.trim()
+    if (!trimmed || trimmed === currentItem.answer.trim()) return
+
+    setBusyAction('modify')
+    setPageError('')
+    try {
+      const updated = await apiJson<ReviewItem>(`/api/v1/review-items/${currentItem.id}/modify`, {
+        method: 'POST',
+        token,
+        json: { answer: trimmed },
+      })
+      replaceItem(updated)
+      setIsEditingAnswer(false)
+      setDraftAnswer(updated.answer)
+      advanceToNextItem()
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : '修改保存失败')
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  const canModify = !!currentItem && draftAnswer.trim().length > 0 && draftAnswer.trim() !== currentItem.answer.trim()
 
   return (
     <div className="app">
@@ -225,38 +309,99 @@ function App() {
           <div className="auth-card">
             <div className="auth-brand">
               <div className="brand-kicker">Interactive Review Platform</div>
-              <h1>花滑视频选择题评测系统</h1>
-              <p>
-                面向本地 MVP 的专业评测界面。左侧完成题目判断，右侧同步查看片段，所有交互即时记录。
-              </p>
+              <h1>花滑 QA 正确选项审核平台</h1>
+              <p>多个专家围绕同一份动态问题池，对正确选项表述进行通过、修改或删除审核。</p>
             </div>
 
-            <div className="auth-form">
+            <form className="auth-form" onSubmit={(e) => void handleAuthSubmit(e)}>
+              <div className="auth-mode-switch">
+                <button
+                  type="button"
+                  className={`auth-mode-btn ${authMode === 'login' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAuthMode('login')
+                    setAuthError('')
+                    setAuthSuccess('')
+                  }}
+                >
+                  登录
+                </button>
+                <button
+                  type="button"
+                  className={`auth-mode-btn ${authMode === 'register' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAuthMode('register')
+                    setAuthError('')
+                    setAuthSuccess('')
+                  }}
+                >
+                  注册
+                </button>
+              </div>
               <div className="panel-title">
                 <span className="panel-title-mark" />
-                用户登录
+                {authMode === 'login' ? '专家登录' : '专家注册'}
               </div>
-              <div className="form-row">
-                <label>用户名</label>
-                <input value={username} onChange={(e) => setUsername(e.target.value)} />
-              </div>
-              <div className="form-row">
-                <label>密码</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+              {authMode === 'login' ? (
+                <>
+                  <div className="form-row">
+                    <label>姓名</label>
+                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入姓名" />
+                  </div>
+                  <div className="form-row">
+                    <label>密码</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="请输入密码"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-row">
+                    <label>姓名</label>
+                    <input
+                      value={registerName}
+                      onChange={(e) => setRegisterName(e.target.value)}
+                      placeholder="请输入真实姓名"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>密码</label>
+                    <input
+                      type="password"
+                      value={registerPassword}
+                      onChange={(e) => setRegisterPassword(e.target.value)}
+                      placeholder="至少 6 位"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>确认密码</label>
+                    <input
+                      type="password"
+                      value={registerConfirmPassword}
+                      onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                      placeholder="再次输入密码"
+                    />
+                  </div>
+                </>
+              )}
               {authError ? <div className="error">{authError}</div> : null}
-              <button className="btn primary wide" onClick={handleLogin}>
-                进入评测
+              {authSuccess ? <div className="success">{authSuccess}</div> : null}
+              <button
+                type="submit"
+                className="btn primary wide"
+                disabled={authLoading}
+              >
+                {authLoading ? '处理中...' : authMode === 'login' ? '进入审核' : '完成注册'}
               </button>
               <div className="auth-tips">
-                <span>普通用户：user / user123</span>
-                <span>管理员：admin / admin123</span>
+                <span>专家用户可直接使用姓名 + 密码注册</span>
+                <span>管理员保留账号：admin / admin123</span>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       ) : (
@@ -267,45 +412,48 @@ function App() {
               <button className="top-tab">WL</button>
               <button className="top-tab">QW2</button>
               <button className="top-tab">W1</button>
-              <button className="top-tab active">Normal</button>
+              <button className="top-tab active">Review</button>
               <button className="top-tab">Correction</button>
             </div>
 
             <div className="workspace-brand">
-              <div className="brand-badge">FS</div>
+              <div className="brand-badge">QA</div>
               <div>
-                <div className="workspace-title">花滑交互式评测平台</div>
-                <div className="workspace-subtitle">Question Review Workspace</div>
+                <div className="workspace-title">花滑 QA 审核工作台</div>
+                <div className="workspace-subtitle">Correct Answer Review Workspace</div>
               </div>
             </div>
 
             <div className="workspace-center">
               <div className="control-group">
-                <span className="control-label">题池</span>
-                <select value={poolName} onChange={(e) => setPoolName(e.target.value as 'Rhythm' | 'Similarity')}>
-                  <option value="Rhythm">Rhythm</option>
-                  <option value="Similarity">Similarity</option>
+                <span className="control-label">比赛类型</span>
+                <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+                  {typeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'ALL' ? '全部' : option}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="control-group compact">
-                <span className="control-label">题数</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={questionCount}
-                  onChange={(e) => setQuestionCount(Number(e.target.value))}
-                />
+              <div className="control-group">
+                <span className="control-label">子问题</span>
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                  {categoryOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'ALL' ? '全部' : option}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <button className="btn primary" onClick={startQuiz}>
-                生成试题
+              <button className="btn primary" onClick={() => void loadReviewItems()}>
+                刷新题池
               </button>
             </div>
 
             <div className="workspace-right">
               <div className="user-chip">
                 <span className="status-dot" />
-                {me?.username} / {me?.role}
+                {me?.name} / {me?.role}
               </div>
               <button className="btn" onClick={logout}>
                 退出
@@ -313,94 +461,109 @@ function App() {
             </div>
           </header>
 
-          <div className="workspace-stats">
+          <div className="workspace-stats review-stats">
             <div className="stat-card">
-              <div className="stat-label">当前题池</div>
-              <div className="stat-value">{poolName}</div>
+              <div className="stat-label">当前类型</div>
+              <div className="stat-value">{selectedType === 'ALL' ? '全部' : selectedType}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">已选题目</div>
-              <div className="stat-value">{selectedCount}</div>
+              <div className="stat-label">当前子问题</div>
+              <div className="stat-value">{selectedCategory === 'ALL' ? '全部' : selectedCategory}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">已确认</div>
-              <div className="stat-value">{confirmedCount}</div>
+              <div className="stat-label">已通过</div>
+              <div className="stat-value">{passedCount}</div>
             </div>
-            <div className="stat-card wide">
-              <div className="stat-label">整体进度</div>
-              <div className="progress-inline">
-                <div className="progress-track">
-                  <div className="progress-bar" style={{ width: `${progressPercent}%` }} />
-                </div>
-                <span>{progressPercent}%</span>
+            <div className="stat-card">
+              <div className="stat-label">已修改 / 已删除</div>
+              <div className="stat-value">
+                {modifiedCount} / {deletedCount}
               </div>
             </div>
           </div>
 
-          {quiz && currentItem ? (
+          {pageError ? <div className="page-error">{pageError}</div> : null}
+
+          {currentItem ? (
             <>
               <div className="review-layout">
                 <aside className="review-panel">
                   <div className="review-panel-scroll" ref={panelScrollRef}>
                     <div className="left-mini-toolbar">
                       <span className="mini-chip active">Question</span>
-                      <span className="mini-chip">Choices</span>
+                      <span className="mini-chip">Answer</span>
+                      <span className="mini-chip">Distractors</span>
                       <span className="mini-chip">Review</span>
-                      <span className="mini-chip">Notes</span>
                     </div>
 
                     <div className="panel-header">
                       <div className="panel-title">
                         <span className="panel-title-mark" />
-                        题目评测区
+                        审核区
                       </div>
                       <div className="panel-meta">
-                        <span className="meta-pill active">Q {currentItem.order_index + 1}</span>
-                        <span className={`meta-pill ${currentItem.confirmed ? 'done' : ''}`}>
-                          {currentItem.confirmed ? 'Confirmed' : 'Pending'}
-                        </span>
+                        <span className="meta-pill active">Q {currentIndex + 1}</span>
+                        <span className={`meta-pill status-${currentItem.status}`}>{currentItem.status}</span>
                       </div>
                     </div>
 
                     <div className="question-card">
                       <div className="question-path">
-                        <span>{poolName}</span>
+                        <span>{currentItem.type}</span>
                         <span>/</span>
-                        <span>Question {currentItem.order_index + 1}</span>
+                        <span>{currentItem.q_category}</span>
+                        <span>/</span>
+                        <span>{currentItem.video_id}</span>
                       </div>
-                      <div className="question-title">{currentItem.stem}</div>
+                      <div className="question-title">{currentItem.question}</div>
                     </div>
 
-                    <div className="selection-summary">
+                    <div className="selection-summary review-summary">
                       <div className="summary-item">
-                        <span className="summary-label">当前选择</span>
-                        <span className="summary-value">{currentOptionLabel}</span>
+                        <span className="summary-label">当前状态</span>
+                        <span className="summary-value">{currentItem.status}</span>
                       </div>
                       <div className="summary-item">
-                        <span className="summary-label">日志序号</span>
-                        <span className="summary-value">{sequenceRef.current}</span>
+                        <span className="summary-label">最近修改</span>
+                        <span className="summary-value">{currentItem._modified_by ?? '--'}</span>
                       </div>
                     </div>
 
-                    <div className="options-list">
-                      {currentItem.options.map((opt, idx) => {
-                        const selected = currentItem.selected_index === idx
-                        const disabled = currentItem.confirmed
-                        return (
-                          <button
-                            key={opt.option_id}
-                            className={`option-card ${selected ? 'selected' : ''}`}
-                            disabled={disabled}
-                            onClick={() => onSelect(idx)}
-                          >
+                    <section className="answer-section">
+                      <div className="section-label">Correct Answer</div>
+                      <div
+                        className={`answer-card ${isEditingAnswer ? 'editing' : ''}`}
+                        onDoubleClick={() => {
+                          setIsEditingAnswer(true)
+                          setDraftAnswer(currentItem.answer)
+                        }}
+                      >
+                        {isEditingAnswer ? (
+                          <textarea
+                            className="answer-editor"
+                            value={draftAnswer}
+                            onChange={(e) => setDraftAnswer(e.target.value)}
+                          />
+                        ) : (
+                          <div className="answer-text">{currentItem.answer}</div>
+                        )}
+                      </div>
+                      <div className="section-hint">双击正确选项进入编辑，仅该区域可修改。</div>
+                    </section>
+
+                    <section className="distractor-section">
+                      <div className="section-label">Distractor Options</div>
+                      <div className="options-list readonly-options">
+                        {currentItem.options.map((optionText, idx) => (
+                          <div key={`${currentItem.item_key}-${idx}`} className="option-card readonly">
                             <div className="option-head">
-                              <div className="option-badge">{String.fromCharCode(65 + idx)}</div>
+                              <div className="option-badge">{idx + 1}</div>
                             </div>
-                            <div className="option-body">{opt.text}</div>
-                          </button>
-                        )
-                      })}
-                    </div>
+                            <div className="option-body">{optionText}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                   </div>
                 </aside>
 
@@ -411,31 +574,35 @@ function App() {
                         <span className="panel-title-mark" />
                         视频观察区
                       </div>
-                      <div className="stage-subtitle">播放当前题目对应片段，完成左侧判断</div>
+                      <div className="stage-subtitle">结合右侧视频判断正确选项表述是否合理。</div>
                     </div>
                     <div className="stage-tags">
-                      <span className="meta-pill">Clip</span>
-                      <span className="meta-pill">{poolName}</span>
+                      <span className="meta-pill">{currentItem.type}</span>
+                      <span className="meta-pill">{currentItem.q_category}</span>
                     </div>
                   </div>
 
                   <div className="video-shell">
                     <div className="video-overlay-bar">
                       <div className="overlay-group">
-                        <span className="overlay-badge warning">Q{currentItem.order_index + 1}</span>
-                        <span className="overlay-badge">{poolName}</span>
+                        <span className="overlay-badge warning">{currentItem.video_id}</span>
+                        <span className="overlay-badge">{currentItem.q_category}</span>
                       </div>
                       <div className="overlay-group">
-                        <span className="overlay-badge success">{confirmedCount}/{quiz.items.length}</span>
+                        <span className={`overlay-badge overlay-${currentItem.status}`}>{currentItem.status}</span>
                       </div>
                     </div>
-                    <video key={currentItem.quiz_item_id} className="video-player" controls src={currentItem.video_uri} />
+                    <video key={currentItem.item_key} className="video-player" controls src={currentItem.video_uri} />
                   </div>
 
                   <div className="stage-footer">
                     <div className="stage-info">
                       <span className="stage-info-label">当前片段</span>
-                      <span className="stage-info-value">{currentItem.video_uri.split('/').pop()}</span>
+                      <span className="stage-info-value">{currentItem.video_id}.mp4</span>
+                    </div>
+                    <div className="stage-info">
+                      <span className="stage-info-label">修改时间</span>
+                      <span className="stage-info-value">{currentItem._modifiedAt ?? '--'}</span>
                     </div>
                   </div>
                 </main>
@@ -444,15 +611,18 @@ function App() {
               <div className="navigator-card">
                 <div className="navigator-toolbar">
                   <div className="panel-actions nav-actions">
-                    <button className="btn danger slim" onClick={onClear}>
-                      删除作答
+                    <button className="btn danger slim" onClick={() => void handleDelete()} disabled={busyAction !== ''}>
+                      删除
+                    </button>
+                    <button className="btn success slim" onClick={() => void handlePass()} disabled={busyAction !== ''}>
+                      通过
                     </button>
                     <button
                       className="btn primary slim"
-                      onClick={onConfirm}
-                      disabled={currentItem.confirmed || currentItem.selected_index === null}
+                      onClick={() => void handleModify()}
+                      disabled={busyAction !== '' || !isEditingAnswer || !canModify}
                     >
-                      确认提交
+                      确认修改
                     </button>
                   </div>
                   <div className="navigator-header">
@@ -460,19 +630,17 @@ function App() {
                       <span className="panel-title-mark" />
                       题目导航
                     </div>
-                    <div className="navigator-text">点击编号快速切换题目</div>
+                    <div className="navigator-text">颜色表示审核状态，点击编号可切换条目。</div>
                   </div>
                 </div>
 
                 <div className="navigator-grid">
-                  {quiz.items.map((it, idx) => (
+                  {filteredItems.map((item, idx) => (
                     <button
-                      key={it.quiz_item_id}
-                      className={`nav-tile ${idx === currentIndex ? 'active' : ''} ${
-                        it.confirmed ? 'done' : ''
-                      }`}
+                      key={item.id}
+                      className={`nav-tile nav-${item.status} ${idx === currentIndex ? 'active' : ''}`}
                       onClick={() => setCurrentIndex(idx)}
-                      title={`第 ${idx + 1} 题`}
+                      title={`${item.video_id} / ${item.q_category}`}
                     >
                       <span className="nav-index">{idx + 1}</span>
                     </button>
@@ -482,8 +650,8 @@ function App() {
             </>
           ) : (
             <div className="empty-state">
-              <div className="empty-title">准备开始一轮评测</div>
-              <div className="empty-text">选择题池与题数后，点击“生成试题”进入左题右视频的评测界面。</div>
+              <div className="empty-title">暂无可审核条目</div>
+              <div className="empty-text">请检查筛选条件，或点击“刷新题池”重新加载动态问题池。</div>
             </div>
           )}
         </div>
