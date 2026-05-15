@@ -401,14 +401,6 @@ function App() {
                         )
                       })}
                     </div>
-
-                    <div className="left-note-card">
-                      <div className="left-note-title">评测说明</div>
-                      <div className="left-note-text">
-                        请选择最符合当前视频片段的专业评论。点击选项即时记录，确认后锁定本题答案。
-                      </div>
-                    </div>
-
                   </div>
                 </aside>
 

@@ -508,26 +508,6 @@
   color: #344054;
 }
 
-.left-note-card {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #f8f9fc;
-  border: 1px solid #eaecf0;
-}
-
-.left-note-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: #344054;
-  margin-bottom: 4px;
-}
-
-.left-note-text {
-  font-size: 11px;
-  line-height: 1.55;
-  color: #667085;
-}
-
 .panel-actions {
   display: flex;
   gap: 8px;
