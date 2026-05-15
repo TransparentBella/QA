@@ -664,13 +664,20 @@
 
 .nav-actions {
   flex-shrink: 0;
+  align-items: stretch;
 }
 
 .nav-actions .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 26px;
+  box-sizing: border-box;
+  height: 28px;
+  min-width: 44px;
+  padding: 0 14px;
+  margin: 0;
+  vertical-align: top;
+  transform: none;
 }
 
 .navigator-grid {
@@ -778,11 +785,17 @@
 }
 
 .btn {
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid #d0d5dd;
   background: #ffffff;
   color: #344054;
   padding: 7px 12px;
   border-radius: 8px;
+  box-sizing: border-box;
+  margin: 0;
+  font-family: inherit;
+  font-weight: 500;
   font-size: 11px;
   line-height: 1;
   transition:
