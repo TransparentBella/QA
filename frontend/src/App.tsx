@@ -79,6 +79,7 @@ function App() {
 
   const sequenceRef = useRef(0)
   const queueRef = useRef<Promise<void>>(Promise.resolve())
+  const panelScrollRef = useRef<HTMLDivElement | null>(null)
 
   const currentItem = useMemo(() => {
     if (!quiz) return null
@@ -102,6 +103,10 @@ function App() {
         setMe(null)
       })
   }, [token])
+
+  useEffect(() => {
+    panelScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [currentIndex])
 
   async function handleLogin() {
     setAuthError('')
@@ -190,6 +195,7 @@ function App() {
     if (currentItem.selected_index === null) return
     const idx = currentItem.selected_index
     const opt = currentItem.options[idx]
+    const nextIndex = quiz && currentIndex < quiz.items.length - 1 ? currentIndex + 1 : currentIndex
     setQuiz((prev) => {
       if (!prev) return prev
       const nextItems = prev.items.map((it) =>
@@ -197,17 +203,14 @@ function App() {
       )
       return { ...prev, items: nextItems }
     })
+    if (nextIndex !== currentIndex) {
+      setCurrentIndex(nextIndex)
+    }
     enqueueLog({
       ...baseLog(currentItem.quiz_item_id, 'CONFIRM'),
       selected_index: idx,
       selected_option_id: opt.option_id,
     })
-    if (quiz && currentIndex < quiz.items.length - 1) {
-      const nextIndex = currentIndex + 1
-      window.requestAnimationFrame(() => {
-        setCurrentIndex(nextIndex)
-      })
-    }
   }
 
   const currentOptionLabel =
@@ -338,7 +341,7 @@ function App() {
             <>
               <div className="review-layout">
                 <aside className="review-panel">
-                  <div className="review-panel-scroll">
+                  <div className="review-panel-scroll" ref={panelScrollRef}>
                     <div className="left-mini-toolbar">
                       <span className="mini-chip active">Question</span>
                       <span className="mini-chip">Choices</span>
@@ -406,18 +409,6 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="panel-actions">
-                      <button className="btn danger slim" onClick={onClear}>
-                        删除选择
-                      </button>
-                      <button
-                        className="btn primary slim"
-                        onClick={onConfirm}
-                        disabled={currentItem.confirmed || currentItem.selected_index === null}
-                      >
-                        确认提交
-                      </button>
-                    </div>
                   </div>
                 </aside>
 
@@ -446,7 +437,7 @@ function App() {
                         <span className="overlay-badge success">{confirmedCount}/{quiz.items.length}</span>
                       </div>
                     </div>
-                    <video className="video-player" controls src={currentItem.video_uri} />
+                    <video key={currentItem.quiz_item_id} className="video-player" controls src={currentItem.video_uri} />
                   </div>
 
                   <div className="stage-footer">
@@ -459,12 +450,26 @@ function App() {
               </div>
 
               <div className="navigator-card">
-                <div className="navigator-header">
-                  <div className="panel-title">
-                    <span className="panel-title-mark" />
-                    题目导航
+                <div className="navigator-toolbar">
+                  <div className="panel-actions nav-actions">
+                    <button className="btn danger slim" onClick={onClear}>
+                      删除作答
+                    </button>
+                    <button
+                      className="btn primary slim"
+                      onClick={onConfirm}
+                      disabled={currentItem.confirmed || currentItem.selected_index === null}
+                    >
+                      确认提交
+                    </button>
                   </div>
-                  <div className="navigator-text">点击编号快速切换题目</div>
+                  <div className="navigator-header">
+                    <div className="panel-title">
+                      <span className="panel-title-mark" />
+                      题目导航
+                    </div>
+                    <div className="navigator-text">点击编号快速切换题目</div>
+                  </div>
                 </div>
 
                 <div className="navigator-grid">
