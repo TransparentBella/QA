@@ -1,4 +1,34 @@
+# Python
+backend/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+*.pyc
 
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
 
+# Env / secrets
+.env
+.env.*
+*.local
 
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
 
+# Runtime data
+data/local_dev.db
+
+# Review runtime snapshots
+data/review_pools/dynamic/
+
+# Logs
+*.log
+logs/
+
+# Optional: media files if large or private
+media/
