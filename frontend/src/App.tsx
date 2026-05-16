@@ -414,15 +414,6 @@ function App() {
       ) : (
         <div className="workspace">
           <header className="workspace-topbar">
-            <div className="workspace-tabs">
-              <button className="top-tab">C52</button>
-              <button className="top-tab">WL</button>
-              <button className="top-tab">QW2</button>
-              <button className="top-tab">W1</button>
-              <button className="top-tab active">Review</button>
-              <button className="top-tab">Correction</button>
-            </div>
-
             <div className="workspace-brand">
               <div className="brand-badge">QA</div>
               <div>
@@ -453,7 +444,7 @@ function App() {
                 </select>
               </div>
               <button className="btn primary" onClick={() => void loadReviewItems()}>
-                刷新题池
+                同步最新数据
               </button>
             </div>
 
@@ -648,7 +639,7 @@ function App() {
           ) : (
             <div className="empty-state">
               <div className="empty-title">暂无可审核条目</div>
-              <div className="empty-text">请检查筛选条件，或点击“刷新题池”重新加载动态问题池。</div>
+              <div className="empty-text">请检查筛选条件，或点击“同步最新数据”重新加载动态问题池。</div>
             </div>
           )}
         </div>

@@ -138,33 +138,11 @@
 
 .workspace-topbar {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 8px;
   align-items: center;
   padding: 5px 8px;
   border-radius: 8px;
-}
-
-.workspace-tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.top-tab {
-  padding: 3px 8px;
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 4px;
-  border: 1px solid #d0d5dd;
-  background: #ffffff;
-  color: #475467;
-}
-
-.top-tab.active {
-  color: #ffffff;
-  background: #4361ee;
-  border-color: #4361ee;
 }
 
 .workspace-brand {
