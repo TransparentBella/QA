@@ -12,11 +12,11 @@
         "选手在接续步中展现了极高的节拍精准度，其落冰步点与四拍子音乐的重音完美契合，动作的起承转合严丝合缝，体现了卓越的音乐感知力与身体控制力。"
       ],
       "answer": "选手展现了顶级的合乐能力。在规整的四拍子旋律中，其落冰步点与钢琴重音完全同步，每一次换刃与转体均精准卡在节拍点上，动作频率与音乐律动高度统一，艺术表现力极佳。",
-      "status": "pending",
-      "is_delete": false,
-      "is_modified": false,
-      "_modifiedAt": null,
-      "_modified_by": null
+      "status": "deleted",
+      "is_delete": true,
+      "is_modified": true,
+      "_modifiedAt": "2026-05-16T12:26:11.136000+00:00",
+      "_modified_by": "test"
     },
     {
       "question_key": "Rhythm-2",
@@ -27,7 +27,7 @@
         "选手上肢动作展现极高节拍精准度。在切分音处，其手臂快速收放与手指瞬间定格完美契合音乐错位重音。干脆的肢体发力精准捕捉复杂音符，体现出卓越的音乐感知力。"
       ],
       "answer": "选手通过手臂的流线延伸与手指的敏捷点触，精准捕捉了钢琴切分音的细微节奏。动作起止与音符重音严丝合缝，展现了极高的音乐敏感度与艺术表现力，时机把握堪称教科书级。",
-      "status": "pending",
+      "status": "passed",
       "is_delete": false,
       "is_modified": false,
       "_modifiedAt": null,

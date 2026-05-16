@@ -44,6 +44,13 @@ type ReviewItemsResponse = {
   items: ReviewItem[]
 }
 
+const STATUS_TEXT: Record<ReviewStatus, string> = {
+  pending: '待审核',
+  passed: '已通过',
+  modified: '已修改',
+  deleted: '已删除',
+}
+
 async function apiJson<T>(
   path: string,
   init?: RequestInit & { token?: string; json?: unknown },
@@ -436,7 +443,7 @@ function App() {
                 </select>
               </div>
               <div className="control-group">
-                <span className="control-label">子问题</span>
+                <span className="control-label">任务</span>
                 <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
                   {categoryOptions.map((option) => (
                     <option key={option} value={option}>
@@ -467,7 +474,7 @@ function App() {
               <div className="stat-value">{selectedType === 'ALL' ? '全部' : selectedType}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">当前子问题</div>
+              <div className="stat-label">当前任务</div>
               <div className="stat-value">{selectedCategory === 'ALL' ? '全部' : selectedCategory}</div>
             </div>
             <div className="stat-card">
@@ -489,13 +496,6 @@ function App() {
               <div className="review-layout">
                 <aside className="review-panel">
                   <div className="review-panel-scroll" ref={panelScrollRef}>
-                    <div className="left-mini-toolbar">
-                      <span className="mini-chip active">Question</span>
-                      <span className="mini-chip">Answer</span>
-                      <span className="mini-chip">Distractors</span>
-                      <span className="mini-chip">Review</span>
-                    </div>
-
                     <div className="panel-header">
                       <div className="panel-title">
                         <span className="panel-title-mark" />
@@ -503,7 +503,7 @@ function App() {
                       </div>
                       <div className="panel-meta">
                         <span className="meta-pill active">Q {currentIndex + 1}</span>
-                        <span className={`meta-pill status-${currentItem.status}`}>{currentItem.status}</span>
+                        <span className={`meta-pill status-${currentItem.status}`}>{STATUS_TEXT[currentItem.status]}</span>
                       </div>
                     </div>
 
@@ -521,7 +521,7 @@ function App() {
                     <div className="selection-summary review-summary">
                       <div className="summary-item">
                         <span className="summary-label">当前状态</span>
-                        <span className="summary-value">{currentItem.status}</span>
+                        <span className="summary-value">{STATUS_TEXT[currentItem.status]}</span>
                       </div>
                       <div className="summary-item">
                         <span className="summary-label">最近修改</span>
@@ -530,7 +530,7 @@ function App() {
                     </div>
 
                     <section className="answer-section">
-                      <div className="section-label">Correct Answer</div>
+                      <div className="section-label">正确选项</div>
                       <div
                         className={`answer-card ${isEditingAnswer ? 'editing' : ''}`}
                         onDoubleClick={() => {
@@ -552,13 +552,10 @@ function App() {
                     </section>
 
                     <section className="distractor-section">
-                      <div className="section-label">Distractor Options</div>
+                      <div className="section-label">干扰选项</div>
                       <div className="options-list readonly-options">
                         {currentItem.options.map((optionText, idx) => (
                           <div key={`${currentItem.item_key}-${idx}`} className="option-card readonly">
-                            <div className="option-head">
-                              <div className="option-badge">{idx + 1}</div>
-                            </div>
                             <div className="option-body">{optionText}</div>
                           </div>
                         ))}
@@ -589,7 +586,7 @@ function App() {
                         <span className="overlay-badge">{currentItem.q_category}</span>
                       </div>
                       <div className="overlay-group">
-                        <span className={`overlay-badge overlay-${currentItem.status}`}>{currentItem.status}</span>
+                        <span className={`overlay-badge overlay-${currentItem.status}`}>{STATUS_TEXT[currentItem.status]}</span>
                       </div>
                     </div>
                     <video key={currentItem.item_key} className="video-player" controls src={currentItem.video_uri} />
