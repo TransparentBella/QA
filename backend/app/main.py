@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -401,6 +401,8 @@ class MeResponse(BaseModel):
 
 
 class ReviewItemOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     file_key: str
     item_key: str
@@ -415,8 +417,8 @@ class ReviewItemOut(BaseModel):
     status: Literal['pending', 'passed', 'modified', 'deleted']
     is_delete: bool
     is_modified: bool
-    _modifiedAt: str | None
-    _modified_by: str | None
+    modified_at: str | None = Field(default=None, alias='_modifiedAt')
+    modified_by: str | None = Field(default=None, alias='_modified_by')
 
 
 class ReviewItemsResponse(BaseModel):
@@ -443,8 +445,8 @@ def _row_to_review_item(row: sqlite3.Row) -> ReviewItemOut:
         status=row['status'],
         is_delete=bool(row['is_delete']),
         is_modified=bool(row['is_modified']),
-        _modifiedAt=_ms_to_iso(row['modified_at_ms']),
-        _modified_by=row['modified_by'],
+        modified_at=_ms_to_iso(row['modified_at_ms']),
+        modified_by=row['modified_by'],
     )
 
 

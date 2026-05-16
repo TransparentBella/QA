@@ -51,6 +51,25 @@ const STATUS_TEXT: Record<ReviewStatus, string> = {
   deleted: '已删除',
 }
 
+function formatBeijingTime(value: string | null): string {
+  if (!value) return '--'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  const formatter = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  return formatter.format(date).replace(/\//g, '-')
+}
+
 async function apiJson<T>(
   path: string,
   init?: RequestInit & { token?: string; json?: unknown },
@@ -516,7 +535,7 @@ function App() {
                       </div>
                       <div className="summary-item">
                         <span className="summary-label">最近修改</span>
-                        <span className="summary-value">{currentItem._modified_by ?? '--'}</span>
+                        <span className="summary-value">{formatBeijingTime(currentItem._modifiedAt)}</span>
                       </div>
                     </div>
 
@@ -587,10 +606,6 @@ function App() {
                     <div className="stage-info">
                       <span className="stage-info-label">当前片段</span>
                       <span className="stage-info-value">{currentItem.video_id}.mp4</span>
-                    </div>
-                    <div className="stage-info">
-                      <span className="stage-info-label">修改时间</span>
-                      <span className="stage-info-value">{currentItem._modifiedAt ?? '--'}</span>
                     </div>
                   </div>
                 </main>
