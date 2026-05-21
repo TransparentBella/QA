@@ -21,6 +21,8 @@ frontend/dist-ssr/
 .idea/
 .vscode/
 
+pipeline/
+
 # Runtime data
 data
 data/
