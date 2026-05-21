@@ -27,8 +27,10 @@ type ReviewItem = {
   id: string
   item_key: string
   video_id: string
+  video_path: string
   video_uri: string
   type: string
+  dimension: string
   q_category: string
   question: string
   options: string[]
@@ -114,6 +116,7 @@ function App() {
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState('')
 
   const [items, setItems] = useState<ReviewItem[]>([])
+  const [selectedDimension, setSelectedDimension] = useState('ALL')
   const [selectedType, setSelectedType] = useState('ALL')
   const [selectedCategory, setSelectedCategory] = useState('ALL')
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -123,6 +126,7 @@ function App() {
 
   const panelScrollRef = useRef<HTMLDivElement | null>(null)
 
+  const dimensionOptions = useMemo(() => ['ALL', ...Array.from(new Set(items.map((item) => item.dimension)))], [items])
   const typeOptions = useMemo(() => ['ALL', ...Array.from(new Set(items.map((item) => item.type)))], [items])
   const categoryOptions = useMemo(
     () => ['ALL', ...Array.from(new Set(items.map((item) => item.q_category)))],
@@ -132,11 +136,12 @@ function App() {
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
+        const matchDimension = selectedDimension === 'ALL' || item.dimension === selectedDimension
         const matchType = selectedType === 'ALL' || item.type === selectedType
         const matchCategory = selectedCategory === 'ALL' || item.q_category === selectedCategory
-        return matchType && matchCategory
+        return matchDimension && matchType && matchCategory
       }),
-    [items, selectedType, selectedCategory],
+    [items, selectedDimension, selectedType, selectedCategory],
   )
 
   const currentItem = filteredItems[currentIndex] ?? null
@@ -169,7 +174,7 @@ function App() {
 
   useEffect(() => {
     setCurrentIndex(0)
-  }, [selectedType, selectedCategory])
+  }, [selectedDimension, selectedType, selectedCategory])
 
   useEffect(() => {
     if (currentIndex >= filteredItems.length) {
@@ -443,6 +448,16 @@ function App() {
 
             <div className="workspace-center">
               <div className="control-group">
+                <span className="control-label">维度</span>
+                <select value={selectedDimension} onChange={(e) => setSelectedDimension(e.target.value)}>
+                  {dimensionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'ALL' ? '全部' : option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="control-group">
                 <span className="control-label">比赛类型</span>
                 <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
                   {typeOptions.map((option) => (
@@ -479,6 +494,10 @@ function App() {
           </header>
 
           <div className="workspace-stats review-stats">
+            <div className="stat-card">
+              <div className="stat-label">当前维度</div>
+              <div className="stat-value">{selectedDimension === 'ALL' ? '全部' : selectedDimension}</div>
+            </div>
             <div className="stat-card">
               <div className="stat-label">当前类型</div>
               <div className="stat-value">{selectedType === 'ALL' ? '全部' : selectedType}</div>
@@ -519,6 +538,8 @@ function App() {
 
                     <div className="question-card">
                       <div className="question-path">
+                        <span>{currentItem.dimension}</span>
+                        <span>/</span>
                         <span>{currentItem.type}</span>
                         <span>/</span>
                         <span>{currentItem.q_category}</span>
@@ -584,6 +605,7 @@ function App() {
                       <div className="stage-subtitle">结合右侧视频判断正确选项表述是否合理。</div>
                     </div>
                     <div className="stage-tags">
+                      <span className="meta-pill">{currentItem.dimension}</span>
                       <span className="meta-pill">{currentItem.type}</span>
                       <span className="meta-pill">{currentItem.q_category}</span>
                     </div>
@@ -593,6 +615,7 @@ function App() {
                     <div className="video-overlay-bar">
                       <div className="overlay-group">
                         <span className="overlay-badge warning">{currentItem.video_id}</span>
+                        <span className="overlay-badge">{currentItem.dimension}</span>
                         <span className="overlay-badge">{currentItem.q_category}</span>
                       </div>
                       <div className="overlay-group">
@@ -643,7 +666,7 @@ function App() {
                       key={item.id}
                       className={`nav-tile nav-${item.status} ${idx === currentIndex ? 'active' : ''}`}
                       onClick={() => setCurrentIndex(idx)}
-                      title={`${item.video_id} / ${item.q_category}`}
+                      title={`${item.video_id} / ${item.dimension} / ${item.q_category}`}
                     >
                       <span className="nav-index">{idx + 1}</span>
                     </button>

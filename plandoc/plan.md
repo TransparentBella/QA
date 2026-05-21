@@ -2,6 +2,8 @@ cd /home/bella/Check/backend
 /home/bella/Check/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8899 --reload
 cd /home/bella/Check/frontend
 npm run dev -- --host 0.0.0.0 --port 5173
+
+  cd /data4/mjz/project/sport-artistic/IceArtBench
 - 普通用户：
 - 用户名： user
 - 密码： user123

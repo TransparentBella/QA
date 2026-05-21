@@ -1,5 +1,6 @@
 # Python
 backend/.venv/
+.venv/
 **/__pycache__/
 **/.pytest_cache/
 **/.mypy_cache/
@@ -21,14 +22,20 @@ frontend/dist-ssr/
 .vscode/
 
 # Runtime data
-data/local_dev.db
+data
+data/
+*.sqlite
+*.sqlite3
+*.db
 
-# Review runtime snapshots
-data/review_pools/dynamic/
+# Generated pipeline reports
+pipeline/reports/
 
 # Logs
 *.log
 logs/
 
-# Optional: media files if large or private
+# Media files are large and should be transferred separately.
 media/
+
+setup_local_db.py

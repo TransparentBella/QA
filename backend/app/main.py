@@ -19,9 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-DATA_DB_PATH = os.path.join(ROOT_DIR, 'data', 'local_dev.db')
-MEDIA_DIR = os.path.join(ROOT_DIR, 'media')
-REVIEW_DYNAMIC_DIR = os.path.join(ROOT_DIR, 'data', 'review_pools', 'dynamic')
+ICEARTBENCH_ROOT = os.environ.get('ICEARTBENCH_ROOT', ROOT_DIR)
+DATA_DIR = os.environ.get('ICEARTBENCH_DATA_DIR', os.path.join(ICEARTBENCH_ROOT, 'data'))
+DATA_DB_PATH = os.path.join(DATA_DIR, 'local_dev.db')
+MEDIA_DIR = os.environ.get('ICEARTBENCH_MEDIA_DIR', os.path.join(ICEARTBENCH_ROOT, 'media'))
+REVIEW_DYNAMIC_DIR = os.path.join(DATA_DIR, 'review_pools', 'dynamic')
 
 JWT_SECRET = os.environ.get('APP_JWT_SECRET', 'dev-secret-change-me')
 JWT_ALGORITHM = 'HS256'
@@ -197,8 +199,10 @@ def _ensure_review_schema(conn: sqlite3.Connection) -> None:
         'item_key',
         'question_key',
         'video_id',
+        'video_path',
         'video_uri',
         'type',
+        'dimension',
         'q_category',
         'question',
         'options_json',
@@ -230,8 +234,10 @@ def _ensure_review_schema(conn: sqlite3.Connection) -> None:
             item_key TEXT NOT NULL UNIQUE,
             question_key TEXT NOT NULL,
             video_id TEXT NOT NULL,
+            video_path TEXT NOT NULL,
             video_uri TEXT NOT NULL,
             type TEXT NOT NULL,
+            dimension TEXT NOT NULL,
             q_category TEXT NOT NULL,
             question TEXT NOT NULL,
             options_json TEXT NOT NULL,
@@ -249,6 +255,8 @@ def _ensure_review_schema(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_review_items_file_key ON review_items(file_key);
         CREATE INDEX IF NOT EXISTS idx_review_items_type_category ON review_items(type, q_category);
+        CREATE INDEX IF NOT EXISTS idx_review_items_type_dimension_category ON review_items(type, dimension, q_category);
+        CREATE INDEX IF NOT EXISTS idx_review_items_video_id ON review_items(video_id);
 
         CREATE TABLE IF NOT EXISTS review_actions (
             id TEXT PRIMARY KEY,
@@ -408,8 +416,10 @@ class ReviewItemOut(BaseModel):
     item_key: str
     question_key: str
     video_id: str
+    video_path: str
     video_uri: str
     type: str
+    dimension: str
     q_category: str
     question: str
     options: list[str]
@@ -436,8 +446,10 @@ def _row_to_review_item(row: sqlite3.Row) -> ReviewItemOut:
         item_key=row['item_key'],
         question_key=row['question_key'],
         video_id=row['video_id'],
+        video_path=row['video_path'],
         video_uri=row['video_uri'],
         type=row['type'],
+        dimension=row['dimension'],
         q_category=row['q_category'],
         question=row['question'],
         options=json.loads(row['options_json']),
@@ -465,8 +477,11 @@ def _write_dynamic_group(db: sqlite3.Connection, file_key: str) -> None:
         return
     first = rows[0]
     payload = {
+        'video_path': first['video_path'],
+        'video_uri': first['video_uri'],
         'video_id': first['video_id'],
         'type': first['type'],
+        'dimension': first['dimension'],
         'q_category': first['q_category'],
         'questions': [
             {
@@ -601,6 +616,7 @@ def me(current_user: CurrentUser = Depends(get_current_user)) -> MeResponse:
 
 @app.get('/api/v1/review-items', response_model=ReviewItemsResponse)
 def review_items(
+    dimension: str | None = None,
     type: str | None = None,
     q_category: str | None = None,
     current_user: CurrentUser = Depends(get_current_user),
@@ -609,6 +625,9 @@ def review_items(
     del current_user
     clauses: list[str] = []
     params: list[Any] = []
+    if dimension:
+        clauses.append('dimension = ?')
+        params.append(dimension)
     if type:
         clauses.append('type = ?')
         params.append(type)
@@ -622,7 +641,7 @@ def review_items(
         SELECT *
         FROM review_items
         {where_sql}
-        ORDER BY type, q_category, video_id, question_key
+        ORDER BY dimension, type, q_category, video_id, question_key
         ''',
         tuple(params),
     )
