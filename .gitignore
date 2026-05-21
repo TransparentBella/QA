@@ -42,3 +42,5 @@ logs/
 media/
 
 setup_local_db.py
+instruct.md
+backend/.venv
