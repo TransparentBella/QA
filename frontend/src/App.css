@@ -632,6 +632,7 @@
   flex: 1;
   align-items: center;
   justify-content: space-between;
+  min-width: 180px;
 }
 
 .panel-actions {
@@ -658,11 +659,72 @@
   transform: none;
 }
 
+.navigator-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.nav-control {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  color: #344054;
+  background: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.nav-control:hover:not(:disabled) {
+  background: #eff4ff;
+  border-color: #84caff;
+  color: #175cd3;
+}
+
+.nav-control:disabled {
+  color: #98a2b3;
+  background: #f2f4f7;
+  cursor: not-allowed;
+}
+
+.nav-control.expand {
+  color: #175cd3;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .navigator-grid {
   margin-top: 6px;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  max-height: 44px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.navigator-grid.expanded {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.navigator-grid.expanded::-webkit-scrollbar {
+  width: 8px;
+}
+
+.navigator-grid.expanded::-webkit-scrollbar-thumb {
+  background: #d0d5dd;
+  border-radius: 999px;
 }
 
 .nav-tile {

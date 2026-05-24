@@ -53,6 +53,8 @@ const STATUS_TEXT: Record<ReviewStatus, string> = {
   deleted: '已删除',
 }
 
+const NAV_PAGE_SIZE = 20
+
 function formatBeijingTime(value: string | null): string {
   if (!value) return '--'
 
@@ -120,6 +122,8 @@ function App() {
   const [selectedType, setSelectedType] = useState('ALL')
   const [selectedCategory, setSelectedCategory] = useState('ALL')
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [navigatorPage, setNavigatorPage] = useState(0)
+  const [isNavigatorExpanded, setIsNavigatorExpanded] = useState(false)
   const [isEditingAnswer, setIsEditingAnswer] = useState(false)
   const [draftAnswer, setDraftAnswer] = useState('')
   const [busyAction, setBusyAction] = useState<'pass' | 'delete' | 'modify' | ''>('')
@@ -145,6 +149,17 @@ function App() {
   )
 
   const currentItem = filteredItems[currentIndex] ?? null
+  const navigatorPageCount = Math.max(1, Math.ceil(filteredItems.length / NAV_PAGE_SIZE))
+  const currentNavigatorPageItems = useMemo(() => {
+    const start = navigatorPage * NAV_PAGE_SIZE
+    return filteredItems.slice(start, start + NAV_PAGE_SIZE).map((item, offset) => ({
+      item,
+      index: start + offset,
+    }))
+  }, [filteredItems, navigatorPage])
+  const navigatorItems = isNavigatorExpanded
+    ? filteredItems.map((item, index) => ({ item, index }))
+    : currentNavigatorPageItems
   const passedCount = items.filter((item) => item.status === 'passed').length
   const deletedCount = items.filter((item) => item.status === 'deleted').length
   const modifiedCount = items.filter((item) => item.status === 'modified').length
@@ -181,6 +196,11 @@ function App() {
       setCurrentIndex(filteredItems.length > 0 ? filteredItems.length - 1 : 0)
     }
   }, [filteredItems.length, currentIndex])
+
+  useEffect(() => {
+    const pageForCurrentIndex = Math.floor(currentIndex / NAV_PAGE_SIZE)
+    setNavigatorPage(Math.min(pageForCurrentIndex, navigatorPageCount - 1))
+  }, [currentIndex, navigatorPageCount])
 
   useEffect(() => {
     panelScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
@@ -656,19 +676,48 @@ function App() {
                       <span className="panel-title-mark" />
                       题目导航
                     </div>
-                    <div className="navigator-text">颜色表示审核状态，点击编号可切换条目。</div>
+                    <div className="navigator-text">
+                      {filteredItems.length > 0
+                        ? `${navigatorPage * NAV_PAGE_SIZE + 1}-${Math.min((navigatorPage + 1) * NAV_PAGE_SIZE, filteredItems.length)} / ${filteredItems.length}`
+                        : '0 / 0'}
+                    </div>
+                  </div>
+                  <div className="navigator-controls">
+                    <button
+                      className="nav-control"
+                      onClick={() => setNavigatorPage((page) => Math.max(0, page - 1))}
+                      disabled={navigatorPage <= 0}
+                      title="上一页"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      className="nav-control"
+                      onClick={() => setNavigatorPage((page) => Math.min(navigatorPageCount - 1, page + 1))}
+                      disabled={navigatorPage >= navigatorPageCount - 1}
+                      title="下一页"
+                    >
+                      ›
+                    </button>
+                    <button
+                      className="nav-control expand"
+                      onClick={() => setIsNavigatorExpanded((value) => !value)}
+                      title={isNavigatorExpanded ? '收起导航' : '展开导航'}
+                    >
+                      {isNavigatorExpanded ? '⌄' : '⌃'}
+                    </button>
                   </div>
                 </div>
 
-                <div className="navigator-grid">
-                  {filteredItems.map((item, idx) => (
+                <div className={`navigator-grid ${isNavigatorExpanded ? 'expanded' : ''}`}>
+                  {navigatorItems.map(({ item, index }) => (
                     <button
                       key={item.id}
-                      className={`nav-tile nav-${item.status} ${idx === currentIndex ? 'active' : ''}`}
-                      onClick={() => setCurrentIndex(idx)}
+                      className={`nav-tile nav-${item.status} ${index === currentIndex ? 'active' : ''}`}
+                      onClick={() => setCurrentIndex(index)}
                       title={`${item.video_id} / ${item.dimension} / ${item.q_category}`}
                     >
-                      <span className="nav-index">{idx + 1}</span>
+                      <span className="nav-index">{index + 1}</span>
                     </button>
                   ))}
                 </div>
